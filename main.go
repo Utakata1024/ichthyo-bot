@@ -81,17 +81,17 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
         // この部分に実際のロジックを実装します。
         s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("MCPサーバーに「%s」を送信します。", messageToSend))
 
-		// Expressサーバーに送信するペイロードを作成
-        payload := ExpressPayload{
-            User:    m.Author.Username,
-            Message: messageToSend,
-        }
-        jsonData, err := json.Marshal(payload)
-        if err != nil {
-            log.Printf("ペイロードのJSONエンコードに失敗しました: %v", err)
-            s.ChannelMessageSend(m.ChannelID, "サーバーとの通信でエラーが発生しました。")
-            return
-        }
+		// // Expressサーバーに送信するペイロードを作成
+        // payload := ExpressPayload{
+        //     User:    m.Author.Username,
+        //     Message: messageToSend,
+        // }
+        // jsonData, err := json.Marshal(payload)
+        // if err != nil {
+        //     log.Printf("ペイロードのJSONエンコードに失敗しました: %v", err)
+        //     s.ChannelMessageSend(m.ChannelID, "サーバーとの通信でエラーが発生しました。")
+        //     return
+        // }
 
         // // Expressサーバーのエンドポイント
         // expressServerURL := "http://localhost:3000/discord-message"
@@ -126,7 +126,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
     switch strings.ToLower(content) {
     case "!hello":
         s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Hello, %sさん！", m.Author.Username))
-    case "!about":
-        s.ChannelMessageSend(m.ChannelID, "私はGoで作られたDiscordボットです。")
+    case "!help":
+        s.ChannelMessageSend(m.ChannelID, "以下に使い方を掲載")
     }
 }
