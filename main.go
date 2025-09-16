@@ -74,13 +74,20 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// メッセージの内容を取得
 	content := strings.TrimSpace(m.Content)
 
-	// Webhook送信コマンドを処理
+	// '!send ' コマンドの処理
 	if strings.HasPrefix(content, "!send ") {
-		// '!send ' の後に続くメッセージを取得
-		messageToSend := strings.TrimSpace(strings.TrimPrefix(content, "!send "))
+		// コマンドの後に続くメッセージを取得
+		messageToSend := strings.TrimPrefix(content, "!send ")
 
-		// ここにWebhook送信処理を呼び出す
-		sendWebhookMessage(messageToSend)
+		// MCPサーバーにメッセージを送信し、Spotify APIの処理を行う関数を呼び出す
+        // ここでは、仮の関数として、Discordにメッセージを返信
+        s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("MCPサーバーに「%s」を送信します。", messageToSend))
+        
+        // 実際の連携処理は、この行を置き換えて実装します。
+        // 例: sendToMCPAndSpotify(messageToSend)
+
+		// 他のコマンドはスキップ
+		return
 	}
 
 	// その他の既存コマンドも引き続き動作
