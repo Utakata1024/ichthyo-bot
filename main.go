@@ -81,43 +81,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
         // この部分に実際のロジックを実装します。
         s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("MCPサーバーに「%s」を送信します。", messageToSend))
 
-		// // Expressサーバーに送信するペイロードを作成
-        // payload := ExpressPayload{
-        //     User:    m.Author.Username,
-        //     Message: messageToSend,
-        // }
-        // jsonData, err := json.Marshal(payload)
-        // if err != nil {
-        //     log.Printf("ペイロードのJSONエンコードに失敗しました: %v", err)
-        //     s.ChannelMessageSend(m.ChannelID, "サーバーとの通信でエラーが発生しました。")
-        //     return
-        // }
-
-        // // Expressサーバーのエンドポイント
-        // expressServerURL := "http://localhost:3000/discord-message"
-        // resp, err := http.Post(expressServerURL, "application/json", bytes.NewBuffer(jsonData))
-        // if err != nil {
-        //     log.Printf("Expressサーバーへのリクエスト送信に失敗しました: %v", err)
-        //     s.ChannelMessageSend(m.ChannelID, "サーバーとの通信に失敗しました。")
-        //     return
-        // }
-        // defer resp.Body.Close()
-
-        // // Expressサーバーからの応答を解析
-        // var expressResponse map[string]string
-        // if err := json.NewDecoder(resp.Body).Decode(&expressResponse); err != nil {
-        //     log.Printf("Expressサーバーからの応答解析に失敗しました: %v", err)
-        //     s.ChannelMessageSend(m.ChannelID, "サーバーからの応答解析に失敗しました。")
-        //     return
-        // }
-
-        // // Expressサーバーからの応答をDiscordに送信
-        // if expressResponse["status"] == "success" {
-        //     s.ChannelMessageSend(m.ChannelID, expressResponse["response"])
-        // } else {
-        //     s.ChannelMessageSend(m.ChannelID, "エラー: " + expressResponse["message"])
-        // }
-
         // 他のコマンドはスキップ
         return
     }
