@@ -22,10 +22,19 @@ type ExpressPayload struct {
     Query string `json:"query"`
 }
 
-// Expressサーバーからの応答の構造体
+// Expressサーバーからの成功時の応答の構造体
+// サーバーの "content" 配列と "text" フィールドを正しく扱えるように修正
+type ExpressSuccessResponse struct {
+    Content []struct {
+        Type string `json:"type"`
+        Text string `json:"text"`
+    } `json:"content"`
+}
+
+// Expressサーバーからのエラー時の応答の構造体
+// エラーメッセージ用の "error" フィールドのみを持つ
 type ExpressResponse struct {
-    Result string `json:"result"`
-    Error  string `json:"error"`
+    Error string `json:"error"`
 }
 
 // チャンネルIDを安全に管理するためのグローバル変数とMutex
@@ -85,7 +94,7 @@ func main() {
                 channelMutex.Unlock()
 
                 if channelID != "" {
-					sendRecommendedSong(dg, channelID, "おすすめソング")
+                    sendRecommendedSong(dg, channelID, "おすすめソング")
                 } else {
                     log.Println("警告: 送信先チャンネルが設定されていません。")
                 }
@@ -147,21 +156,30 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
         }
         defer resp.Body.Close()
 
-        log.Printf("Expressサーバーへのリクエスト送信: %v", resp)
+        log.Printf("Expressサーバーからの応答ステータス: %v", resp.StatusCode)
 
-        var expressResponse ExpressResponse
-        if err := json.NewDecoder(resp.Body).Decode(&expressResponse); err != nil {
-            log.Printf("Expressサーバーからの応答解析に失敗しました: %v", err)
-            s.ChannelMessageSend(m.ChannelID, "サーバーからの応答解析に失敗しました。")
-            return
-        }
-
-        if expressResponse.Error != "" {
-            s.ChannelMessageSend(m.ChannelID, "エラー: " + expressResponse.Error)
+        // HTTPステータスコードで成功と失敗を判定
+        if resp.StatusCode == http.StatusOK {
+            var expressResponse ExpressSuccessResponse
+            if err := json.NewDecoder(resp.Body).Decode(&expressResponse); err != nil {
+                log.Printf("Expressサーバーからの応答解析に失敗しました: %v", err)
+                s.ChannelMessageSend(m.ChannelID, "サーバーからの応答解析に失敗しました。")
+                return
+            }
+            if len(expressResponse.Content) > 0 && expressResponse.Content[0].Type == "text" {
+                s.ChannelMessageSend(m.ChannelID, expressResponse.Content[0].Text)
+            } else {
+                s.ChannelMessageSend(m.ChannelID, "サーバーからの有効な応答が見つかりませんでした。")
+            }
         } else {
-            s.ChannelMessageSend(m.ChannelID, expressResponse.Result)
+            var expressError ExpressResponse
+            if err := json.NewDecoder(resp.Body).Decode(&expressError); err != nil {
+                log.Printf("Expressサーバーからのエラー応答解析に失敗しました: %v", err)
+                s.ChannelMessageSend(m.ChannelID, "サーバーからのエラー応答解析に失敗しました。")
+                return
+            }
+            s.ChannelMessageSend(m.ChannelID, "エラー: " + expressError.Error)
         }
-
         return
     }
 
@@ -175,34 +193,45 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 // 1時間ごとにおすすめソングを送信する関数
 func sendRecommendedSong(s *discordgo.Session, channelID, query string) {
-	payload := ExpressPayload{
-		Query: query,
-	}
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("ペイロードのJSONエンコードに失敗しました: %v", err)
-		return
-	}
+    payload := ExpressPayload{
+        Query: query,
+    }
+    jsonData, err := json.Marshal(payload)
+    if err != nil {
+        log.Printf("ペイロードのJSONエンコードに失敗しました: %v", err)
+        return
+    }
 
-	expressServerURL := "http://127.0.0.1:4000/api/tool/search-track"
-	resp, err := http.Post(expressServerURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		log.Printf("Expressサーバーへのリクエスト送信に失敗しました: %v", err)
-		s.ChannelMessageSend(channelID, "サーバーとの通信に失敗しました。")
-		return
-	}
-	defer resp.Body.Close()
+    expressServerURL := "http://127.0.0.1:4000/api/tool/search-track"
+    resp, err := http.Post(expressServerURL, "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        log.Printf("Expressサーバーへのリクエスト送信に失敗しました: %v", err)
+        s.ChannelMessageSend(channelID, "サーバーとの通信に失敗しました。")
+        return
+    }
+    defer resp.Body.Close()
 
-	var expressResponse ExpressResponse
-	if err := json.NewDecoder(resp.Body).Decode(&expressResponse); err != nil {
-		log.Printf("Expressサーバーからの応答解析に失敗しました: %v", err)
-		s.ChannelMessageSend(channelID, "サーバーからの応答解析に失敗しました。")
-		return
-	}
-	
-	if expressResponse.Error != "" {
-		s.ChannelMessageSend(channelID, "エラー: " + expressResponse.Error)
-	} else {
-		s.ChannelMessageSend(channelID, "おすすめソング: " + expressResponse.Result)
-	}
+    log.Printf("Expressサーバーからの応答ステータス: %v", resp.StatusCode)
+
+    if resp.StatusCode == http.StatusOK {
+        var expressResponse ExpressSuccessResponse
+        if err := json.NewDecoder(resp.Body).Decode(&expressResponse); err != nil {
+            log.Printf("Expressサーバーからの応答解析に失敗しました: %v", err)
+            s.ChannelMessageSend(channelID, "サーバーからの応答解析に失敗しました。")
+            return
+        }
+        if len(expressResponse.Content) > 0 && expressResponse.Content[0].Type == "text" {
+            s.ChannelMessageSend(channelID, "おすすめソング: " + expressResponse.Content[0].Text)
+        } else {
+            s.ChannelMessageSend(channelID, "サーバーからの有効な応答が見つかりませんでした。")
+        }
+    } else {
+        var expressError ExpressResponse
+        if err := json.NewDecoder(resp.Body).Decode(&expressError); err != nil {
+            log.Printf("Expressサーバーからのエラー応答解析に失敗しました: %v", err)
+            s.ChannelMessageSend(channelID, "サーバーからのエラー応答解析に失敗しました。")
+            return
+        }
+        s.ChannelMessageSend(channelID, "エラー: " + expressError.Error)
+    }
 }
