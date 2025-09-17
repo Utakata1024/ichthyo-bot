@@ -85,7 +85,7 @@ func main() {
                 channelMutex.Unlock()
 
                 if channelID != "" {
-                    sendRecurringMessage(dg, channelID)
+					sendRecommendedSong(dg, channelID, "おすすめソング")
                 } else {
                     log.Println("警告: 送信先チャンネルが設定されていません。")
                 }
@@ -173,11 +173,36 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
     }
 }
 
-// 繰り返しメッセージを送信する関数
-func sendRecurringMessage(s *discordgo.Session, channelID string) {
-    message := "1時間ごとの定期メッセージだよ！"
-    _, err := s.ChannelMessageSend(channelID, message)
-    if err != nil {
-        log.Printf("定期メッセージの送信に失敗しました: %v", err)
-    }
+// 1時間ごとにおすすめソングを送信する関数
+func sendRecommendedSong(s *discordgo.Session, channelID, query string) {
+	payload := ExpressPayload{
+		Query: query,
+	}
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("ペイロードのJSONエンコードに失敗しました: %v", err)
+		return
+	}
+
+	expressServerURL := "http://127.0.0.1:4000/api/tool/search-track"
+	resp, err := http.Post(expressServerURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("Expressサーバーへのリクエスト送信に失敗しました: %v", err)
+		s.ChannelMessageSend(channelID, "サーバーとの通信に失敗しました。")
+		return
+	}
+	defer resp.Body.Close()
+
+	var expressResponse ExpressResponse
+	if err := json.NewDecoder(resp.Body).Decode(&expressResponse); err != nil {
+		log.Printf("Expressサーバーからの応答解析に失敗しました: %v", err)
+		s.ChannelMessageSend(channelID, "サーバーからの応答解析に失敗しました。")
+		return
+	}
+	
+	if expressResponse.Error != "" {
+		s.ChannelMessageSend(channelID, "エラー: " + expressResponse.Error)
+	} else {
+		s.ChannelMessageSend(channelID, "おすすめソング: " + expressResponse.Result)
+	}
 }
