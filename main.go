@@ -161,7 +161,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// 新しいコマンド: レコメンドキーワードの設定
+	// レコメンドキーワードの設定
 	if strings.HasPrefix(content, "!setkeyword ") {
 		newKeyword := strings.TrimPrefix(content, "!setkeyword ")
 		if newKeyword == "" {
@@ -175,7 +175,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// 新しいコマンド: レコメンド頻度の設定
+	// レコメンド頻度の設定
 	if strings.HasPrefix(content, "!setinterval ") {
 		parts := strings.Split(strings.TrimPrefix(content, "!setinterval "), " ")
 		if len(parts) != 2 {
@@ -210,6 +210,19 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		restartTickerChan <- struct{}{}
 		return
 	}
+
+    // 現在の設定を表示
+    if strings.ToLower(content) == "!getstatus" {
+        channelAndKeywordMutex.Lock()
+        channelID := targetChannelID
+        keyword := recommendKeyword
+        interval := recommendInterval
+        channelAndKeywordMutex.Unlock()
+
+        statusMessage := fmt.Sprintf("現在の設定:\nチャンネルID: %s\n検索キーワード: %s\n頻度: %v", channelID, keyword, interval)
+        s.ChannelMessageSend(m.ChannelID, statusMessage)
+        return
+    }
 
 	if strings.HasPrefix(content, "!send ") {
 		messageToSend := strings.TrimPrefix(content, "!send ")
