@@ -48,10 +48,11 @@ type ExpressErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// チャンネルIDを安全に管理するためのグローバル変数とMutex
+// チャンネルIDとキーワードを安全に管理するためのグローバル変数とMutex
 var (
-	targetChannelID string
-	channelMutex    sync.Mutex
+	targetChannelID     string
+	recommendKeyword    string = "おすすめソング" // 初期値を設定
+	channelAndKeywordMutex sync.Mutex
 )
 
 func main() {
@@ -93,19 +94,19 @@ func main() {
 
 	// 1時間ごとにメッセージを送信するGoroutineを起動
 	go func() {
-		// time.Hour を使用して1時間ごとにティックを発生させる
-		ticker := time.NewTicker(1 * time.Minute) // テスト用に1分に設定。本番では1*time.Hourに変更してください。
+		ticker := time.NewTicker(1 * time.Minute) // テスト用に1分に設定
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				channelMutex.Lock()
+				channelAndKeywordMutex.Lock()
 				channelID := targetChannelID
-				channelMutex.Unlock()
+				keyword := recommendKeyword
+				channelAndKeywordMutex.Unlock()
 
 				if channelID != "" {
-					sendRecommendedSong(dg, channelID, "おすすめソング")
+					sendRecommendedSong(dg, channelID, keyword)
 				} else {
 					log.Println("警告: 送信先チャンネルが設定されていません。")
 				}
@@ -137,11 +138,25 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	content := strings.TrimSpace(m.Content)
 
 	if strings.ToLower(content) == "!setchannel" {
-		channelMutex.Lock()
+		channelAndKeywordMutex.Lock()
 		targetChannelID = m.ChannelID
-		channelMutex.Unlock()
+		channelAndKeywordMutex.Unlock()
 
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("このチャンネルを定期メッセージの送信先に設定しました！(ID: %s)", m.ChannelID))
+		return
+	}
+
+	// 新しいコマンド: レコメンドキーワードの設定
+	if strings.HasPrefix(content, "!setkeyword ") {
+		newKeyword := strings.TrimPrefix(content, "!setkeyword ")
+		if newKeyword == "" {
+			s.ChannelMessageSend(m.ChannelID, "キーワードが指定されていません。例: `!setkeyword J-Pop`")
+			return
+		}
+		channelAndKeywordMutex.Lock()
+		recommendKeyword = newKeyword
+		channelAndKeywordMutex.Unlock()
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("定期メッセージの検索キーワードを「%s」に設定しました。", newKeyword))
 		return
 	}
 
@@ -173,7 +188,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "!hello":
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Hello, %sさん！", m.Author.Username))
 	case "!help":
-		s.ChannelMessageSend(m.ChannelID, "以下に使い方を掲載\n!setchannel: このチャンネルを定期メッセージの送信先に設定します。\n!send <メッセージ>: Expressサーバーにメッセージを送信します。")
+		s.ChannelMessageSend(m.ChannelID, "以下に使い方を掲載\n!setchannel: このチャンネルを定期メッセージの送信先に設定します。\n!setkeyword <キーワード>: 定期メッセージの検索キーワードを設定します。\n!send <メッセージ>: Expressサーバーにメッセージを送信します。")
 	}
 }
 
@@ -250,7 +265,7 @@ func searchSpotify(keyword string) (string, error) {
 	return "検索結果が見つかりませんでした", nil
 }
 
-// 1時間ごとにおすすめソングを送信する関数
+// 定期実行でおすすめソングを送信する関数
 func sendRecommendedSong(s *discordgo.Session, channelID, query string) {
 	// ステップ1: 分類APIを呼び出してキーワードを取得
 	keyword, err := classifyQuery(query)
